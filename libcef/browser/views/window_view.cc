@@ -17,6 +17,7 @@
 #endif
 #endif
 
+#include "cef/libcef/browser/context.h"
 #include "cef/libcef/browser/geometry_util.h"
 #include "cef/libcef/browser/image_impl.h"
 #include "cef/libcef/browser/views/widget.h"
@@ -521,6 +522,21 @@ void CefWindowView::CreateWidget(gfx::AcceleratedWidget parent_widget) {
   bool can_activate = true;
   bool can_resize = true;
 
+  // Determine frameless-ness up front: it gates whether a translucent
+  // background is honored. (The native-parent path below forces it true.)
+  if (cef_delegate()) {
+    is_frameless_ = cef_delegate()->IsFrameless(GetCefWindow());
+  }
+
+  // Only a frameless Views window may use a translucent background. A normal
+  // (framed) window stays opaque even when the global background_color is the
+  // default 0 (== SK_ColorTRANSPARENT) — otherwise every default-configured
+  // Views window would silently become transparent instead of opaque-white.
+  // Matches the "frameless window using Views framework" gating documented in
+  // include/internal/cef_types.h (agentmuxai/agentmux#872).
+  auto color = CefContext::Get()->GetBackgroundColor(nullptr, STATE_ENABLED);
+  bool is_translucent = is_frameless_ && color == SK_ColorTRANSPARENT;
+
   const bool has_native_parent = parent_widget != gfx::kNullAcceleratedWidget;
   if (has_native_parent) {
     params.parent_widget = parent_widget;
@@ -539,6 +555,9 @@ void CefWindowView::CreateWidget(gfx::AcceleratedWidget parent_widget) {
     params.opacity = views::Widget::InitParams::WindowOpacity::kOpaque;
   } else {
     params.type = views::Widget::InitParams::TYPE_WINDOW;
+    if (is_translucent) {
+      params.opacity = views::Widget::InitParams::WindowOpacity::kTranslucent;
+    }
   }
 
   if (cef_delegate()) {
@@ -560,8 +579,7 @@ void CefWindowView::CreateWidget(gfx::AcceleratedWidget parent_widget) {
     if (has_native_parent) {
       DCHECK(!params.bounds.IsEmpty());
     } else {
-      is_frameless_ = cef_delegate()->IsFrameless(cef_window);
-
+      // is_frameless_ was already determined above (it gates translucency).
       params.native_widget =
           view_util::CreateNativeWidget(widget, cef_window, cef_delegate());
 
@@ -727,6 +745,22 @@ void CefWindowView::CreateWidget(gfx::AcceleratedWidget parent_widget) {
     // |widget|.
     host_widget_destruction_observer_ =
         std::make_unique<WidgetDestructionObserver>(host_widget);
+
+    if (is_translucent) {
+      GetCefWindow()->SetBackgroundColor(SK_ColorTRANSPARENT);
+    }
+  } else if (is_translucent) {
+    // AgentMux/CEF transparency patch: also apply transparent background to
+    // top-level (non-modal) translucent windows. Without this the browser-side
+    // ui::Compositor keeps its default opaque white clear color, and the
+    // wl_surface's framebuffer is filled with opaque white before the
+    // renderer's CompositorFrame is composited on top — so even with the
+    // renderer's LayerTreeHost properly transparent, the final pixels are
+    // opaque. CefWindowImpl::SetBackgroundColor calls
+    // widget_->GetCompositor()->SetBackgroundColor(SK_ColorTRANSPARENT)
+    // which sets the browser-side cc::LayerTreeHost background_color to
+    // transparent, so CalculateRenderPasses skips the screen-fill quad.
+    GetCefWindow()->SetBackgroundColor(SK_ColorTRANSPARENT);
   }
 }
 

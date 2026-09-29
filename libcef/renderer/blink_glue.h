@@ -125,6 +125,17 @@ BLINK_EXPORT void StartNavigation(blink::WebLocalFrame* frame,
 // Sets whether select popup menus should be rendered by the browser.
 BLINK_EXPORT void SetUseExternalPopupMenus(blink::WebView* view, bool value);
 
+// Overrides Blink's base background color to transparent for |view|.
+// Blink's page_base_background_color_ defaults to SK_ColorWHITE, so promoted
+// compositing layers that paint page background clear to opaque white even
+// when the browser-side transparency cascade has flipped the LayerTreeHost to
+// has_transparent_background. WebViewImpl::SetBaseBackgroundColorOverride-
+// Transparent is not exposed on the public blink::WebView interface, hence
+// this glue. The override is sticky on the WebViewImpl instance.
+BLINK_EXPORT void SetBaseBackgroundColorOverrideTransparent(
+    blink::WebView* view,
+    bool override_to_transparent);
+
 }  // namespace blink_glue
 
 #endif  // CEF_LIBCEF_RENDERER_BLINK_GLUE_H_

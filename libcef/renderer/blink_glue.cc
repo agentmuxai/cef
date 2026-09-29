@@ -325,4 +325,10 @@ void SetUseExternalPopupMenus(blink::WebView* view, bool value) {
       .SetUseExternalPopupMenus(value);
 }
 
+void SetBaseBackgroundColorOverrideTransparent(blink::WebView* view,
+                                               bool override_to_transparent) {
+  static_cast<blink::WebViewImpl*>(view)
+      ->SetBaseBackgroundColorOverrideTransparent(override_to_transparent);
+}
+
 }  // namespace blink_glue

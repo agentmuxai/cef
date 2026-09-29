@@ -17,9 +17,69 @@
 #include "cef/libcef/browser/views/window_impl.h"
 #include "chrome/browser/profiles/profile.h"
 #include "components/input/native_web_keyboard_event.h"
+#include "content/browser/renderer_host/render_widget_host_impl.h"
+#include "content/browser/renderer_host/render_widget_host_owner_delegate.h"
+#include "content/public/browser/render_frame_host.h"
+#include "content/public/browser/render_widget_host_view.h"
+#include "content/public/browser/web_contents.h"
+#include "content/public/browser/web_contents_observer.h"
 #include "ui/content_accelerators/accelerator_util.h"
 
 namespace {
+
+// AgentMux transparency-cascade observer. WebContentsCreated fires before
+// the renderer process spawns, so `web_contents->GetRenderWidgetHostView()`
+// is null at that point and RWHView::SetBackgroundColor — the call that
+// triggers SetBackgroundOpaque(false) IPC → renderer flips
+// cc::LayerTreeHost::has_transparent_background_=true — never runs. This
+// observer self-attaches to a transparent-background WebContents and applies
+// the color the moment the primary main frame's renderer is created. It deletes
+// itself only on WebContents destruction and persists across renderer swaps,
+// re-applying on every RenderFrameCreated / RenderViewReady — not single-use
+// (see Attach() below).
+class TransparencyApplyOnRenderReady : public content::WebContentsObserver {
+ public:
+  static void Attach(content::WebContents* web_contents) {
+    // Self-owning. Deletes itself when the WebContents is destroyed; stays
+    // alive across cross-process navigations so each new renderer process
+    // gets the transparent background applied on RenderFrameCreated /
+    // RenderViewReady — otherwise a new RWHView reverts to the default
+    // opaque clear color and Wayland sees opaque pixels again.
+    new TransparencyApplyOnRenderReady(web_contents);
+  }
+
+ private:
+  explicit TransparencyApplyOnRenderReady(content::WebContents* wc)
+      : content::WebContentsObserver(wc) {}
+  ~TransparencyApplyOnRenderReady() override = default;
+
+  void ApplyToCurrentRWHView() {
+    auto* view = web_contents()->GetRenderWidgetHostView();
+    if (!view) {
+      return;
+    }
+    view->SetBackgroundColor(SK_ColorTRANSPARENT);
+    // Also directly call SetBackgroundOpaque(false) via owner_delegate to
+    // guarantee the IPC fires. RWHView::SetBackgroundColor early-returns when
+    // the stored color matches the new one, which can suppress the IPC after
+    // a prior SetDefaults call already set the view's default to transparent.
+    auto* host_impl =
+        static_cast<content::RenderWidgetHostImpl*>(view->GetRenderWidgetHost());
+    if (host_impl && host_impl->owner_delegate()) {
+      host_impl->owner_delegate()->SetBackgroundOpaque(false);
+    }
+  }
+
+  void RenderFrameCreated(content::RenderFrameHost* rfh) override {
+    if (rfh && rfh->IsInPrimaryMainFrame()) {
+      ApplyToCurrentRWHView();
+    }
+  }
+
+  void RenderViewReady() override { ApplyToCurrentRWHView(); }
+
+  void WebContentsDestroyed() override { delete this; }
+};
 
 std::optional<cef_gesture_command_t> GetGestureCommand(
     ui::GestureEvent* event) {
@@ -170,6 +230,43 @@ void CefBrowserViewImpl::WebContentsCreated(
   if (web_view()) {
     web_view()->SetWebContents(web_contents);
   }
+  // AgentMux follow-up to b921ffe18 — propagate the BrowserView's transparent
+  // background color to the renderer's WebContents AND its RenderWidgetHost
+  // view. Chad Nelson's patch colored the Views/Aura side
+  // (CefBrowserViewImpl::SetBackgroundColor + CefWindow::SetBackgroundColor +
+  // GetCompositor()->SetBackgroundColor) but never reached
+  // cc::LayerTreeHost::has_transparent_background_. As a result the
+  // compositor clamped every pixel's alpha to 1.0 in the renderer's final
+  // framebuffer, even after a kTranslucent Aura widget and an empty
+  // wl_surface opaque_region were arranged.
+  //
+  // Two-pronged fix:
+  //   1. WebContents::SetPageBaseBackgroundColor — sets the page's base
+  //      color (blink::Page level). Broadcasts across renderer process
+  //      swaps; survives navigations. Sets the bg behind body when body
+  //      is transparent (e.g. when CSS body bg has alpha < 1).
+  //   2. RenderWidgetHostView::SetBackgroundColor — THIS is the one that
+  //      triggers SetBackgroundOpaque(false) IPC → renderer flips
+  //      cc::LayerTreeHost::has_transparent_background_ = true → cc emits
+  //      true ARGB pixels (no alpha-1.0 clamp). Without this, a body with
+  //      alpha=0 shows the renderer's default opaque white instead of the
+  //      desktop. May be null at WebContentsCreated time if the renderer
+  //      process isn't up yet — guard accordingly; the RWHView gets the
+  //      page-base color and inherits the right opacity once it spawns.
+  //
+  // See agentmux/docs/retros/cef-transparency-empirical-2026-05-11.md.
+  if (web_contents &&
+      SkColorGetA(default_background_color_) == SK_AlphaTRANSPARENT) {
+    web_contents->SetPageBaseBackgroundColor(SK_ColorTRANSPARENT);
+    // Immediate-try (rarely effective — RWHView is usually null here):
+    if (auto* view = web_contents->GetRenderWidgetHostView()) {
+      view->SetBackgroundColor(SK_ColorTRANSPARENT);
+    }
+    // Deferred-try: install a one-shot observer that fires when the
+    // primary main frame's renderer process spawns. This is the path
+    // that actually flips has_transparent_background_ in production.
+    TransparencyApplyOnRenderReady::Attach(web_contents);
+  }
 }
 
 void CefBrowserViewImpl::WebContentsDestroyed(
@@ -187,6 +284,24 @@ void CefBrowserViewImpl::BrowserCreated(
     base::RepeatingClosure on_bounds_changed) {
   browser_ = browser;
   on_bounds_changed_ = on_bounds_changed;
+
+  // AgentMux: WebContentsCreated fires before the renderer process is up, so
+  // `web_contents->GetRenderWidgetHostView()` is null there and our
+  // transparency cascade can't reach the RWHView. BrowserCreated runs after
+  // the browser host is fully wired, by which point the RWHView either
+  // exists or will exist imminently. Re-apply here for windows whose
+  // settings background is transparent. Without this, the renderer keeps
+  // its default opaque-white compositor clear color, and CSS body alpha=0
+  // produces opaque (34,34,34,255) pixels in the wl_buffer — verified via
+  // direct pixel sampling on AgentMux 0.33.789.
+  if (browser &&
+      SkColorGetA(default_background_color_) == SK_AlphaTRANSPARENT) {
+    if (auto* wc = browser->GetWebContents()) {
+      if (auto* view = wc->GetRenderWidgetHostView()) {
+        view->SetBackgroundColor(SK_ColorTRANSPARENT);
+      }
+    }
+  }
 }
 
 void CefBrowserViewImpl::BrowserDestroyed(CefBrowserHostBase* browser) {
@@ -409,8 +524,19 @@ void CefBrowserViewImpl::SetPendingBrowserCreateParams(
 }
 
 void CefBrowserViewImpl::SetDefaults(const CefBrowserSettings& settings) {
-  SetBackgroundColor(
-      CefContext::Get()->GetBackgroundColor(&settings, STATE_DISABLED));
+  // AgentMux patch: views-hosted browsers must propagate transparency from
+  // CefSettings.background_color when alpha=0. The original STATE_DISABLED
+  // forced opaque-white fallback regardless of settings, which then cascaded
+  // to the BrowserView's background and prevented Layer 4 (renderer-side
+  // LayerTreeHost::has_transparent_background_) from flipping. STATE_ENABLED
+  // here is correct for CefBrowserView since it is by definition views-hosted;
+  // GetBackgroundColor still honors opaque settings (alpha=FF) — only triggers
+  // transparency when settings.background_color has alpha=0. Pairs with the
+  // is_views_hosted plumbing in browser_host_base.cc and
+  // browser_platform_delegate_create.cc from PR #4086 / commit 5ab41b6.
+  default_background_color_ =
+      CefContext::Get()->GetBackgroundColor(&settings, STATE_ENABLED);
+  SetBackgroundColor(default_background_color_);
 }
 
 views::View* CefBrowserViewImpl::CreateRootView() {

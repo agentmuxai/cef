@@ -119,6 +119,15 @@ struct NewBrowserConfig {
   bool print_preview_enabled;
   bool move_pip_enabled;
   bool allow_pip_without_user_activation;
+
+  // True when this browser's resolved background color is fully transparent
+  // (the transparency cascade is armed for it). The renderer uses this to set
+  // Blink's base background color override — without it Blink's
+  // page_base_background_color_ stays SK_ColorWHITE and every promoted
+  // compositing layer that paints page background clears to opaque white,
+  // defeating the browser-side cascade. See
+  // agentmux/docs/retro/cef-linux-transparency-consolidated.md.
+  bool background_transparent;
 };
 
 struct NewBrowserInfo {
