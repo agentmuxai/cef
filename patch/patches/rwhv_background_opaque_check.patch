@@ -1,0 +1,22 @@
+diff --git content/browser/renderer_host/render_widget_host_view_base.cc content/browser/renderer_host/render_widget_host_view_base.cc
+--- content/browser/renderer_host/render_widget_host_view_base.cc
++++ content/browser/renderer_host/render_widget_host_view_base.cc
+@@ -358,7 +358,17 @@ std::optional<SkColor> RenderWidgetHostViewBase::GetBackgroundColor() {
+ }
+ 
+ bool RenderWidgetHostViewBase::IsBackgroundColorOpaque() {
+-  std::optional<SkColor> bg_color = GetBackgroundColor();
++  // CEF: Deliberately non-virtual — read the stored color, not the
++  // platform-substituted one. RenderWidgetHostViewMac::GetBackgroundColor()
++  // substitutes SK_ColorWHITE for explicitly-transparent views
++  // (crbug.com/735407); routing that substitution through this opacity check
++  // made SetBackgroundColor(SK_ColorTRANSPARENT) re-assert
++  // SetBackgroundOpaque(true) on macOS, defeating transparent-background
++  // browsers. The white substitution remains in effect for every display
++  // consumer; only the opacity bookkeeping sees the true color. No behavior
++  // change on platforms whose GetBackgroundColor() is not overridden.
++  std::optional<SkColor> bg_color =
++      RenderWidgetHostViewBase::GetBackgroundColor();
+   return bg_color ? SkColorGetA(*bg_color) == SK_AlphaOPAQUE : true;
+ }
+ 
