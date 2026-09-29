@@ -451,7 +451,7 @@ class CefWindow : public CefPanel {
   /// Returns true if the move was successfully initiated, false otherwise
   /// (e.g. unsupported platform, no platform window available).
   ///
-  /*--cef(added=15200)--*/
+  /*--cef(added=15400)--*/
   virtual bool BeginWindowDrag() = 0;
 };
 
