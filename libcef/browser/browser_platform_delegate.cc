@@ -574,9 +574,19 @@ bool CefBrowserPlatformDelegate::AllowPictureInPictureWithoutUserActivation()
 }
 
 cef::BrowserConfig CefBrowserPlatformDelegate::GetBrowserConfig() const {
+  // background_transparent: GetBackgroundColor() returns the per-browser
+  // color resolved at delegate-creation time (browser_platform_delegate_
+  // create.cc — CefContext::GetBackgroundColor with STATE_ENABLED for
+  // windowless/views-hosted browsers, including popups of views-hosted
+  // openers). This is the same arming condition as the browser-side
+  // transparency cascade in CefBrowserViewImpl, and unlike a browser_view_
+  // lookup it is valid before SetBrowserView() — popups and Alloy-style
+  // BrowserViews report correctly (codex review on PR #4).
   return {IsWindowless(), IsPrintPreviewSupported(),
           IsMovePictureInPictureEnabled(),
-          AllowPictureInPictureWithoutUserActivation()};
+          AllowPictureInPictureWithoutUserActivation(),
+          /*background_transparent=*/SkColorGetA(GetBackgroundColor()) ==
+              SK_AlphaTRANSPARENT};
 }
 
 // static
