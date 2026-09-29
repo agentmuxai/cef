@@ -1,0 +1,17 @@
+diff --git ui/views/widget/desktop_aura/window_event_filter_linux.cc ui/views/widget/desktop_aura/window_event_filter_linux.cc
+--- ui/views/widget/desktop_aura/window_event_filter_linux.cc
++++ ui/views/widget/desktop_aura/window_event_filter_linux.cc
+@@ -85,6 +85,13 @@
+   }
+
+   if (hit_test == HTCAPTION) {
++    // CEF: Let right-clicks on the caption area fall through to the renderer
++    // so embedders can show their own context menu instead of relying on the
++    // built-in WindowFrameAction::kMenu path (which requires a
++    // context_menu_controller on the contents view that CEF does not set).
++    if (event->changed_button_flags() & ui::EF_RIGHT_MOUSE_BUTTON) {
++      return false;
++    }
+     OnClickedCaption(event, previous_click_component);
+     return true;
+   }
