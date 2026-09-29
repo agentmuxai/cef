@@ -431,6 +431,28 @@ class CefWindow : public CefPanel {
   ///
   /*--cef(default_retval=CEF_RUNTIME_STYLE_DEFAULT)--*/
   virtual cef_runtime_style_t GetRuntimeStyle() = 0;
+
+  ///
+  /// Begin a native interactive window move/drag operation. Intended to be
+  /// invoked from a left-mouse-button-down handler (typically forwarded
+  /// from a renderer-side event via IPC). On Linux/Wayland this issues
+  /// xdg_toplevel.move; on Linux/X11 it issues _NET_WM_MOVERESIZE. Both
+  /// are non-blocking — the compositor handles the drag until the user
+  /// releases the mouse button.
+  ///
+  /// Use this when you need both "drag from this header element" AND
+  /// "right-click contextmenu on the same element." `-webkit-app-region:
+  /// drag` cannot satisfy both: Chromium suppresses all renderer events
+  /// (mousedown/contextmenu/etc.) on drag-region elements before they
+  /// reach the renderer process, so right-click menus don't fire on them.
+  /// Keeping the element HTCLIENT and calling BeginWindowDrag from a JS
+  /// mousedown handler resolves the conflict.
+  ///
+  /// Returns true if the move was successfully initiated, false otherwise
+  /// (e.g. unsupported platform, no platform window available).
+  ///
+  /*--cef(added=15200)--*/
+  virtual bool BeginWindowDrag() = 0;
 };
 
 #endif  // CEF_INCLUDE_VIEWS_CEF_WINDOW_H_

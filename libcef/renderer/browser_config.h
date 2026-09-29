@@ -16,6 +16,11 @@ struct BrowserConfig {
   bool print_preview_enabled;
   bool move_pip_enabled;
   bool allow_pip_without_user_activation;
+
+  // True when this browser's resolved background color is fully transparent.
+  // In the renderer this arms the Blink base-background-color override
+  // (see CefRenderManager::MaybeCreateBrowser).
+  bool background_transparent = false;
 };
 
 }  // namespace cef

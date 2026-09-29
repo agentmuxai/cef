@@ -142,6 +142,16 @@ class CefBrowserViewImpl
 
   std::unique_ptr<CefBrowserCreateParams> pending_browser_create_params_;
 
+  // AgentMux follow-up to b921ffe18 — cache the background color resolved at
+  // SetDefaults() time so WebContentsCreated() can propagate it to the
+  // renderer's WebContents (via SetPageBaseBackgroundColor). The Views-side
+  // SetBackgroundColor only colors the Aura layer; without this second
+  // propagation cc::LayerTreeHost stays at has_transparent_background_=false
+  // and the compositor clamps every fragment's alpha to 1.0 — visible as
+  // opaque pixels even when the wl_buffer is ARGB8888 and opaque_region is
+  // empty. See agentmux/docs/retros/cef-transparency-empirical-2026-05-11.md.
+  SkColor default_background_color_ = SK_ColorWHITE;
+
   CefRefPtr<CefBrowserHostBase> browser_;
 
   views::UnhandledKeyboardEventHandler unhandled_keyboard_event_handler_;
