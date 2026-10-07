@@ -7,6 +7,7 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 
 #include "base/memory/raw_ptr.h"
 #include "cef/include/views/cef_overlay_controller.h"
@@ -39,6 +40,7 @@ class CefOverlayViewHost : public views::WidgetDelegate,
   void MoveIfNecessary();
 
   void SetOverlayBounds(const gfx::Rect& bounds);
+  void SetShape(const std::vector<CefRect>& rects);
   void SetOverlayInsets(const CefInsets& insets);
 
   // views::ViewObserver methods:
@@ -60,6 +62,9 @@ class CefOverlayViewHost : public views::WidgetDelegate,
 
   // views::WidgetDelegate methods:
   void WidgetIsZombie(views::Widget* widget) override;
+
+  // Whether |widget_| has the shape-aware event targeter (SetShape).
+  bool shape_targeter_installed_ = false;
 
   // The CefWindowView that created us.
   raw_ptr<CefWindowView> window_view_;

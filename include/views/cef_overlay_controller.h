@@ -38,6 +38,8 @@
 #define CEF_INCLUDE_VIEWS_CEF_OVERLAY_CONTROLLER_H_
 #pragma once
 
+#include <vector>
+
 #include "include/cef_base.h"
 
 class CefView;
@@ -205,6 +207,16 @@ class CefOverlayController : public CefBaseRefCounted {
   ///
   /*--cef()--*/
   virtual bool IsDrawn() = 0;
+
+  ///
+  /// Limit the overlay to |rects|: it draws, and receives mouse and touch
+  /// events, only inside them, so the window content below shows through and
+  /// takes input everywhere else (for example a menu the window draws over the
+  /// overlay). Rects are in DIP relative to the overlay's origin. An empty
+  /// |rects| removes the limit.
+  ///
+  /*--cef(added=15400,optional_param=rects)--*/
+  virtual void SetShape(const std::vector<CefRect>& rects) = 0;
 };
 
 #endif  // CEF_INCLUDE_VIEWS_CEF_OVERLAY_CONTROLLER_H_

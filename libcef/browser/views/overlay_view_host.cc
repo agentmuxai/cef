@@ -14,7 +14,28 @@
 #include "ui/compositor/compositor.h"
 #include "ui/compositor/layer.h"
 
+#if defined(USE_AURA)
+#include "ui/aura/window.h"
+#include "ui/aura/window_targeter.h"
+#endif
+
 namespace {
+
+#if defined(USE_AURA)
+// Hit-tests an overlay against its layer's alpha shape (SetShape), so events
+// outside the shape fall through to the window content below.
+class ShapeHitTestTargeter : public aura::WindowTargeter {
+ public:
+  std::unique_ptr<HitTestRects> GetExtraHitTestShapeRects(
+      aura::Window* target) const override {
+    const ui::Layer* layer = target->layer();
+    if (!layer || !layer->alpha_shape()) {
+      return nullptr;
+    }
+    return std::make_unique<HitTestRects>(*layer->alpha_shape());
+  }
+};
+#endif
 
 class CefOverlayControllerImpl : public CefOverlayController {
  public:
@@ -161,6 +182,12 @@ class CefOverlayControllerImpl : public CefOverlayController {
 
   bool IsDrawn() override { return IsVisible(); }
 
+  void SetShape(const std::vector<CefRect>& rects) override {
+    if (IsValid()) {
+      host_->SetShape(rects);
+    }
+  }
+
  private:
   raw_ptr<CefOverlayViewHost> host_;
   CefRefPtr<CefView> view_;
@@ -266,6 +293,27 @@ void CefOverlayViewHost::MoveIfNecessary() {
     return;
   }
   SetOverlayBounds(ComputeBounds());
+}
+
+void CefOverlayViewHost::SetShape(const std::vector<CefRect>& rects) {
+  if (!widget_) {
+    return;
+  }
+  std::unique_ptr<views::Widget::ShapeRects> shape;
+  if (!rects.empty()) {
+    shape = std::make_unique<views::Widget::ShapeRects>();
+    for (const auto& r : rects) {
+      shape->emplace_back(r.x, r.y, r.width, r.height);
+    }
+  }
+#if defined(USE_AURA)
+  if (shape && !shape_targeter_installed_) {
+    widget_->GetNativeWindow()->SetEventTargeter(
+        std::make_unique<ShapeHitTestTargeter>());
+    shape_targeter_installed_ = true;
+  }
+#endif
+  widget_->SetShape(std::move(shape));
 }
 
 void CefOverlayViewHost::SetOverlayBounds(const gfx::Rect& bounds) {
