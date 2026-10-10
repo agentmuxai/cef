@@ -19,6 +19,7 @@ CefWidgetImpl::CefWidgetImpl(CefWindowView* window_view)
 
 CefWidgetImpl::~CefWidgetImpl() {
   DCHECK(associated_profiles_.empty());
+  DCHECK(observed_theme_services_.empty());
 }
 
 void CefWidgetImpl::Initialized() {
@@ -40,15 +41,20 @@ void CefWidgetImpl::AddAssociatedProfile(Profile* profile) {
   ProfileMap::iterator it = associated_profiles_.find(profile);
   if (it != associated_profiles_.end()) {
     // Another instance of a known Profile.
-    (it->second)++;
+    (it->second.count)++;
     return;
   }
 
   auto* current_profile = GetThemeProfile();
 
-  associated_profiles_.insert(std::make_pair(profile, 1));
+  auto* theme_service = ThemeServiceFactory::GetForProfile(profile);
+  associated_profiles_.insert(std::make_pair(
+      profile,
+      AssociatedProfile{.count = 1, .theme_service = theme_service}));
 
-  if (auto* theme_service = ThemeServiceFactory::GetForProfile(profile)) {
+  // Observe each ThemeService once: an off-the-record Profile shares its
+  // original Profile's ThemeService, which may already be observed.
+  if (theme_service && observed_theme_services_[theme_service]++ == 0) {
     theme_service->AddObserver(this);
   }
 
@@ -67,17 +73,25 @@ void CefWidgetImpl::RemoveAssociatedProfile(Profile* profile) {
     DCHECK(false);  // Not reached.
     return;
   }
-  if (--(it->second) > 0) {
+  if (--(it->second.count) > 0) {
     // More instances of the Profile exist.
     return;
   }
 
   auto* current_profile = GetThemeProfile();
 
+  ThemeService* theme_service = it->second.theme_service;
   associated_profiles_.erase(it);
 
-  if (auto* theme_service = ThemeServiceFactory::GetForProfile(profile)) {
-    theme_service->RemoveObserver(this);
+  // Stop observing the ThemeService only when no associated Profile uses it.
+  if (theme_service) {
+    auto ts_it = observed_theme_services_.find(theme_service);
+    if (ts_it == observed_theme_services_.end()) {
+      DCHECK(false);  // Not reached.
+    } else if (--(ts_it->second) == 0) {
+      observed_theme_services_.erase(ts_it);
+      theme_service->RemoveObserver(this);
+    }
   }
 
   auto* new_profile = GetThemeProfile();
