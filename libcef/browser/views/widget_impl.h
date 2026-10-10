@@ -17,6 +17,7 @@
 
 class CefWindowView;
 class Profile;
+class ThemeService;
 
 // Widget specialization to implement theme support for Alloy style. The
 // global NativeTheme (native/OS theme) will be used unless this Widget contains
@@ -88,9 +89,25 @@ class CefWidgetImpl : public views::Widget,
 
   bool initialized_ = false;
 
-  // Map of Profile* to count.
-  using ProfileMap = std::map<raw_ptr<Profile>, size_t>;
+  struct AssociatedProfile {
+    // Number of instances of the Profile.
+    size_t count = 0;
+    // The Profile's ThemeService, if any. Kept so that removal doesn't need
+    // to look it up from a Profile that may be shutting down.
+    raw_ptr<ThemeService> theme_service = nullptr;
+  };
+
+  // Map of Profile* to its instance count and ThemeService.
+  using ProfileMap = std::map<raw_ptr<Profile>, AssociatedProfile>;
   ProfileMap associated_profiles_;
+
+  // Map of observed ThemeService* to the number of associated Profiles that
+  // use it. Distinct Profiles can share one ThemeService: an off-the-record
+  // Profile uses its original Profile's (ThemeServiceFactory redirects it).
+  // This Widget observes each ThemeService once, for as long as any
+  // associated Profile uses it.
+  using ThemeServiceMap = std::map<raw_ptr<ThemeService>, size_t>;
+  ThemeServiceMap observed_theme_services_;
 
   CefColorProviderTracker color_provider_tracker_{this};
 
