@@ -33,10 +33,12 @@
 #include "services/network/public/mojom/network_context.mojom.h"
 
 #include "base/memory/raw_ptr.h"
+#include "base/scoped_observation.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/autocomplete/chrome_autocomplete_provider_client.h"
 #include "chrome/browser/autocomplete/chrome_autocomplete_scheme_classifier.h"
+#include "chrome/browser/profiles/profile_observer.h"
 #include "components/omnibox/browser/autocomplete_classifier.h"
 #include "components/omnibox/browser/autocomplete_controller.h"
 #include "components/omnibox/browser/autocomplete_input.h"
@@ -55,8 +57,11 @@ base::AtomicSequenceNumber g_next_id;
 // browser's chrome://omnibox debug page does: an AutocompleteController with
 // the default providers and ChromeAutocompleteProviderClient. Reports every
 // result update to the client and deletes itself after the final one (or
-// after a time limit, if a provider never finishes).
-class AutocompleteHelper : public AutocompleteController::Observer {
+// after a time limit, if a provider never finishes). If the profile is
+// destroyed first (an Incognito or custom context closing), it reports what
+// it has and lets go of the profile at once.
+class AutocompleteHelper : public AutocompleteController::Observer,
+                           public ProfileObserver {
  public:
   AutocompleteHelper(Profile* profile,
                      CefRefPtr<CefAutocompleteCallback> callback)
@@ -69,12 +74,17 @@ class AutocompleteHelper : public AutocompleteController::Observer {
         std::make_unique<ChromeAutocompleteProviderClient>(profile),
         AutocompleteControllerConfig{.provider_types = providers});
     controller_->AddObserver(this);
+    profile_observation_.Observe(profile);
   }
 
   AutocompleteHelper(const AutocompleteHelper&) = delete;
   AutocompleteHelper& operator=(const AutocompleteHelper&) = delete;
 
-  ~AutocompleteHelper() override { controller_->RemoveObserver(this); }
+  ~AutocompleteHelper() override {
+    if (controller_) {
+      controller_->RemoveObserver(this);
+    }
+  }
 
   void Start(const std::u16string& text) {
     CEF_REQUIRE_UIT();
@@ -99,7 +109,25 @@ class AutocompleteHelper : public AutocompleteController::Observer {
     if (done) {
       finished_ = true;
       // Not from inside the controller's own notification.
-      content::GetUIThreadTaskRunner({})->DeleteSoon(FROM_HERE, this);
+      DeleteSoon();
+    }
+  }
+
+  // ProfileObserver:
+  void OnProfileWillBeDestroyed(Profile* profile) override {
+    // The providers hold the profile and its services: drop them now, not on
+    // a later task.
+    profile_observation_.Reset();
+    timeout_.Stop();
+    if (!finished_) {
+      finished_ = true;
+      Report(true);
+    }
+    controller_->RemoveObserver(this);
+    controller_.reset();
+    profile_ = nullptr;
+    if (!delete_pending_) {
+      delete this;
     }
   }
 
@@ -111,6 +139,11 @@ class AutocompleteHelper : public AutocompleteController::Observer {
     // Report what there is, then stop the providers that never finished.
     Report(true);
     controller_->Stop(AutocompleteStopReason::kInteraction);
+    DeleteSoon();
+  }
+
+  void DeleteSoon() {
+    delete_pending_ = true;
     content::GetUIThreadTaskRunner({})->DeleteSoon(FROM_HERE, this);
   }
 
@@ -139,7 +172,9 @@ class AutocompleteHelper : public AutocompleteController::Observer {
   CefRefPtr<CefAutocompleteCallback> callback_;
   std::unique_ptr<AutocompleteController> controller_;
   base::OneShotTimer timeout_;
+  base::ScopedObservation<Profile, ProfileObserver> profile_observation_{this};
   bool finished_ = false;
+  bool delete_pending_ = false;
 };
 
 class ResolveHostHelper : public network::ResolveHostClientBase {
