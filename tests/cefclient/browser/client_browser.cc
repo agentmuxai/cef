@@ -18,9 +18,69 @@
 #include "tests/cefclient/browser/client_update_win.h"
 #endif
 
+#include <sstream>
+
+#include "include/base/cef_callback.h"
+#include "include/cef_request_context.h"
+#include "include/wrapper/cef_closure_task.h"
+
 namespace client::browser {
 
 namespace {
+
+// AgentMux test hook: --autocomplete-test="git|rust|weather in" runs each query
+// through CefRequestContext::GetAutocompleteSuggestions on the global request
+// context and logs every update.
+class AutocompleteTestCallback : public CefAutocompleteCallback {
+ public:
+  explicit AutocompleteTestCallback(const std::string& query)
+      : query_(query) {}
+
+  void OnAutocompleteResult(CefRefPtr<CefListValue> matches,
+                            bool done) override {
+    std::stringstream ss;
+    ss << "[autocomplete-test] \"" << query_ << "\" update " << ++updates_
+       << (done ? " (done)" : "") << ": " << matches->GetSize() << " matches";
+    for (size_t i = 0; i < matches->GetSize() && i < 8; ++i) {
+      CefRefPtr<CefDictionaryValue> m = matches->GetDictionary(i);
+      ss << "\n    " << m->GetInt("relevance") << " " << m->GetString("type")
+         << " [" << m->GetString("provider") << "] \""
+         << m->GetString("contents").ToString() << "\" -> "
+         << m->GetString("destination_url").ToString();
+      const std::string inline_text =
+          m->GetString("inline_autocompletion").ToString();
+      if (!inline_text.empty()) {
+        ss << " (inline: \"" << inline_text << "\")";
+      }
+    }
+    LOG(WARNING) << ss.str();
+  }
+
+ private:
+  const std::string query_;
+  int updates_ = 0;
+  IMPLEMENT_REFCOUNTING(AutocompleteTestCallback);
+};
+
+void RunAutocompleteTest(const std::string& queries) {
+  std::stringstream all(queries);
+  std::string query;
+  int64_t delay_ms = 5000;  // Let the history index load first.
+  while (std::getline(all, query, '|')) {
+    if (query.empty()) {
+      continue;
+    }
+    CefPostDelayedTask(TID_UI, base::BindOnce([](const std::string& q) {
+                         LOG(WARNING) << "[autocomplete-test] start \"" << q
+                                      << "\"";
+                         CefRequestContext::GetGlobalContext()
+                             ->GetAutocompleteSuggestions(
+                                 q, new AutocompleteTestCallback(q));
+                       }, query),
+                       delay_ms);
+    delay_ms += 4000;
+  }
+}
 
 class ClientBrowserDelegate : public ClientAppBrowser::Delegate {
  public:
@@ -57,6 +117,13 @@ class ClientBrowserDelegate : public ClientAppBrowser::Delegate {
     if (!crl_sets_path.empty()) {
       // Load the CRLSets file from the specified path.
       CefLoadCRLSetsFile(crl_sets_path);
+    }
+
+    const std::string& autocomplete_test =
+        CefCommandLine::GetGlobalCommandLine()->GetSwitchValue(
+            "autocomplete-test");
+    if (!autocomplete_test.empty()) {
+      RunAutocompleteTest(autocomplete_test);
     }
 
 #if defined(CEF_USE_BOOTSTRAP)
