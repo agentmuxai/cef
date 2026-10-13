@@ -269,20 +269,6 @@ class CefRequestContext : public CefPreferenceManager {
   virtual void ResolveHost(const CefString& origin,
                            CefRefPtr<CefResolveCallback> callback) = 0;
 
-#if CEF_API_ADDED(15400)
-  ///
-  /// Runs the browser's address bar autocomplete for |text| in this context's
-  /// profile: history, typed URLs, search suggestions from the default search
-  /// engine, and the rest of the browser's default providers. |callback| is
-  /// executed on the UI thread each time the result set changes, ending with
-  /// a call where |done| is true. Only valid with the Chrome runtime.
-  ///
-  /*--cef(added=15400)--*/
-  virtual void GetAutocompleteSuggestions(
-      const CefString& text,
-      CefRefPtr<CefAutocompleteCallback> callback) = 0;
-#endif
-
   ///
   /// Returns the MediaRouter object associated with this context.  If
   /// |callback| is non-NULL it will be executed asnychronously on the UI thread
@@ -400,6 +386,25 @@ class CefRequestContext : public CefPreferenceManager {
   ///
   /*--cef(default_retval=CEF_COLOR_VARIANT_SYSTEM)--*/
   virtual cef_color_variant_t GetChromeColorSchemeVariant() = 0;
+
+#if CEF_API_ADDED(15400)
+  // AgentMux addition. The generated C struct lists unversioned members first,
+  // then versioned ones by version and declaration order, so this lands last:
+  // a binding generated from the stock 15400 headers keeps every other member
+  // at the same offset.
+
+  ///
+  /// Runs the browser's address bar autocomplete for |text| in this context's
+  /// profile: history, typed URLs, search suggestions from the default search
+  /// engine, and the rest of the browser's default providers. |callback| is
+  /// executed on the UI thread each time the result set changes, ending with
+  /// a call where |done| is true. Only valid with the Chrome runtime.
+  ///
+  /*--cef(added=15400)--*/
+  virtual void GetAutocompleteSuggestions(
+      const CefString& text,
+      CefRefPtr<CefAutocompleteCallback> callback) = 0;
+#endif
 };
 
 #endif  // CEF_INCLUDE_CEF_REQUEST_CONTEXT_H_
