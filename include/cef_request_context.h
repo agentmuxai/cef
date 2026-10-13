@@ -67,6 +67,27 @@ class CefResolveCallback : public virtual CefBaseRefCounted {
       const std::vector<CefString>& resolved_ips) = 0;
 };
 
+#if CEF_API_ADDED(15400)
+///
+/// Callback interface for CefRequestContext::GetAutocompleteSuggestions.
+///
+/*--cef(source=client,added=15400)--*/
+class CefAutocompleteCallback : public virtual CefBaseRefCounted {
+ public:
+  ///
+  /// Called on the UI thread each time the result set changes, best match
+  /// first. |matches| is a list of dictionaries with the keys "contents",
+  /// "description", "destination_url", "fill_into_edit",
+  /// "inline_autocompletion" (strings), "type", "provider" (strings),
+  /// "relevance" (int) and "allowed_to_be_default_match" (bool). |done| is
+  /// true for the final call, after which there are no more calls.
+  ///
+  /*--cef()--*/
+  virtual void OnAutocompleteResult(CefRefPtr<CefListValue> matches,
+                                    bool done) = 0;
+};
+#endif
+
 #if CEF_API_ADDED(13401)
 ///
 /// Implemented by the client to observe content and website setting changes and
@@ -247,6 +268,20 @@ class CefRequestContext : public CefPreferenceManager {
   /*--cef()--*/
   virtual void ResolveHost(const CefString& origin,
                            CefRefPtr<CefResolveCallback> callback) = 0;
+
+#if CEF_API_ADDED(15400)
+  ///
+  /// Runs the browser's address bar autocomplete for |text| in this context's
+  /// profile: history, typed URLs, search suggestions from the default search
+  /// engine, and the rest of the browser's default providers. |callback| is
+  /// executed on the UI thread each time the result set changes, ending with
+  /// a call where |done| is true. Only valid with the Chrome runtime.
+  ///
+  /*--cef(added=15400)--*/
+  virtual void GetAutocompleteSuggestions(
+      const CefString& text,
+      CefRefPtr<CefAutocompleteCallback> callback) = 0;
+#endif
 
   ///
   /// Returns the MediaRouter object associated with this context.  If
