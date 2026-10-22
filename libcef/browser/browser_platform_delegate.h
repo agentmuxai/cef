@@ -298,7 +298,8 @@ class CefBrowserPlatformDelegate {
   // (client-provided) parent window. May be called on multiple threads.
   virtual bool HasExternalParent() const;
 
-  // Notify the browser that it was hidden. Only used with windowless rendering.
+  // Notify the browser that it was hidden. AgentMux: windowed browsers too;
+  // the default marks the WebContents hidden or shown.
   virtual void WasHidden(bool hidden);
 
   // Returns true if the browser is currently hidden. Only used with windowless

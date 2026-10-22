@@ -358,11 +358,8 @@ void AlloyBrowserHostImpl::WasResized() {
 }
 
 void AlloyBrowserHostImpl::WasHidden(bool hidden) {
-  if (!IsWindowless()) {
-    DCHECK(false) << "Window rendering is not disabled";
-    return;
-  }
-
+  // AgentMux: also for windowed browsers (see
+  // CefBrowserPlatformDelegate::WasHidden).
   if (!CEF_CURRENTLY_ON_UIT()) {
     CEF_POST_TASK(CEF_UIT,
                   base::BindOnce(&CefBrowserHost::WasHidden, this, hidden));
