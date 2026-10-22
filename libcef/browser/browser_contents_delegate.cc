@@ -436,6 +436,12 @@ void CefBrowserContentsDelegate::PrimaryMainFrameRenderProcessGone(
     return;
   }
 
+  // AgentMux: a discarded page's renderer was ended on purpose
+  // (CefBrowserHost::Discard), not a crash.
+  if (web_contents()->WasDiscarded()) {
+    return;
+  }
+
   if (auto c = client()) {
     if (auto handler = c->GetRequestHandler()) {
       int error_code = web_contents()->GetCrashedErrorCode();

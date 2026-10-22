@@ -6,6 +6,7 @@
 
 #include <tuple>
 
+#include "base/feature_list.h"
 #include "base/logging.h"
 #include "cef/libcef/browser/browser_guest_util.h"
 #include "cef/libcef/browser/browser_info_manager.h"
@@ -34,8 +35,10 @@
 #include "content/public/browser/download_request_utils.h"
 #include "content/public/browser/file_select_listener.h"
 #include "content/public/browser/navigation_entry.h"
+#include "content/public/browser/render_process_host.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/render_widget_host.h"
+#include "content/public/common/content_features.h"
 #include "ui/base/resource/resource_scale_factor.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/shell_dialogs/select_file_policy.h"
@@ -987,6 +990,66 @@ void CefBrowserHostBase::SetAxViewportCollapse(bool enabled) {
   ax_viewport_collapse_ = enabled;
   if (auto* web_contents = GetWebContents()) {
     web_contents->OnWebPreferencesChanged();
+  }
+}
+
+// AgentMux: in-place discard, the way Chrome's TabLifecycleUnit does it with
+// kWebContentsDiscard: fast-kill the renderer if this page is its only user,
+// then discard the frame tree, which keeps the NavigationController and marks
+// it as needing a reload.
+bool CefBrowserHostBase::Discard(CefRefPtr<CefCompletionCallback> callback) {
+  if (!CEF_CURRENTLY_ON_UIT()) {
+    DCHECK(false) << "called on invalid thread";
+    return false;
+  }
+  // WebContents::Discard is NOTREACHED() with the feature off.
+  if (!base::FeatureList::IsEnabled(features::kWebContentsDiscard)) {
+    return false;
+  }
+  auto* web_contents = GetWebContents();
+  if (!web_contents || web_contents->WasDiscarded()) {
+    return false;
+  }
+  auto* main_frame = web_contents->GetPrimaryMainFrame();
+  if (!main_frame) {
+    return false;
+  }
+
+  if (auto* process = main_frame->GetProcess()) {
+    process->FastShutdownIfPossible(1u,
+                                    /*skip_unload_handlers=*/false,
+                                    /*ignore_workers=*/false,
+                                    /*ignore_keep_alive=*/false,
+                                    /*ignore_pending_reuse=*/false,
+                                    /*use_outermost_main_frame_check=*/true);
+  }
+  web_contents->Discard(base::BindOnce(
+      [](CefRefPtr<CefCompletionCallback> callback) {
+        if (callback) {
+          callback->OnComplete();
+        }
+      },
+      callback));
+  // Discard declines while a navigation is about to commit.
+  return web_contents->WasDiscarded();
+}
+
+bool CefBrowserHostBase::IsDiscarded() {
+  if (!CEF_CURRENTLY_ON_UIT()) {
+    DCHECK(false) << "called on invalid thread";
+    return false;
+  }
+  auto* web_contents = GetWebContents();
+  return web_contents && web_contents->WasDiscarded();
+}
+
+void CefBrowserHostBase::LoadIfNecessary() {
+  if (!CEF_CURRENTLY_ON_UIT()) {
+    DCHECK(false) << "called on invalid thread";
+    return;
+  }
+  if (auto* web_contents = GetWebContents()) {
+    web_contents->GetController().LoadIfNecessary();
   }
 }
 
