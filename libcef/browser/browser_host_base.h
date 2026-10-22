@@ -280,6 +280,9 @@ class CefBrowserHostBase : public CefBrowserHost,
   bool IsRenderProcessUnresponsive() override;
   cef_runtime_style_t GetRuntimeStyle() override;
   void SetAxViewportCollapse(bool enabled) override;
+  bool Discard(CefRefPtr<CefCompletionCallback> callback) override;
+  bool IsDiscarded() override;
+  void LoadIfNecessary() override;
 
   // CefBrowser methods:
   bool IsValid() override;

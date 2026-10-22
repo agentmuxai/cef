@@ -1092,6 +1092,48 @@ class CefBrowserHost : public virtual CefBaseRefCounted {
   /*--cef(added=experimental)--*/
   virtual void SetAxViewportCollapse(bool enabled) = 0;
 #endif
+
+#if CEF_API_ADDED(15400)
+  // AgentMux addition, in 15400 like CefRequestContext's
+  // GetAutocompleteSuggestions: a client built for 15400 (CEF_API_VERSION_LAST)
+  // gets them, which it wouldn't as experimental. The generated C struct lists
+  // versioned members by version, so these land after GetRuntimeStyle and
+  // before the experimental SetAxViewportCollapse, which moves back by three
+  // slots (it is null for a 15400 client either way).
+
+  ///
+  /// Discards the page to free its renderer, keeping the browser and its
+  /// navigation history: the page's document is released, and its renderer
+  /// process exits too if no other page uses it. Call LoadIfNecessary() to
+  /// load it again; the page restores the state it last reported (scroll
+  /// position, form contents). An exit of a discarded page's renderer is not
+  /// reported to CefRequestHandler::OnRenderProcessTerminated. Returns false
+  /// if the browser can't be discarded now: the WebContentsDiscard feature is
+  /// not enabled (--enable-features=WebContentsDiscard), it is already
+  /// discarded, or a navigation is about to commit. |callback| (optional) is
+  /// executed on the UI thread when the discard completes; it may not be
+  /// executed if the renderer process exits first. This method can only be
+  /// called on the UI thread.
+  ///
+  /*--cef(added=15400,optional_param=callback)--*/
+  virtual bool Discard(CefRefPtr<CefCompletionCallback> callback) = 0;
+
+  ///
+  /// Returns true if the page was discarded with Discard() and hasn't loaded
+  /// again since. This method can only be called on the UI thread.
+  ///
+  /*--cef(added=15400)--*/
+  virtual bool IsDiscarded() = 0;
+
+  ///
+  /// Loads the current navigation entry again if the browser needs it (after
+  /// Discard()), as a history navigation, so the page gets back its saved
+  /// state. Does nothing otherwise. This method can only be called on the UI
+  /// thread.
+  ///
+  /*--cef(added=15400)--*/
+  virtual void LoadIfNecessary() = 0;
+#endif
 };
 
 #endif  // CEF_INCLUDE_CEF_BROWSER_H_
