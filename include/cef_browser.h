@@ -701,7 +701,10 @@ class CefBrowserHost : public virtual CefBaseRefCounted {
   ///
   /// Notify the browser that it has been hidden or shown. Layouting and
   /// CefRenderHandler::OnPaint notification will stop when the browser is
-  /// hidden. This method is only used when window rendering is disabled.
+  /// hidden. AgentMux: also for windowed Alloy-style browsers, where it marks
+  /// the page hidden (timer throttling, no new frames) without touching the
+  /// native window; call it with false on every path that shows the browser
+  /// again, or the page stays hidden.
   ///
   /*--cef()--*/
   virtual void WasHidden(bool hidden) = 0;
