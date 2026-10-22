@@ -6,6 +6,7 @@
 
 #include <tuple>
 
+#include "base/feature_list.h"
 #include "base/logging.h"
 #include "cef/libcef/browser/browser_guest_util.h"
 #include "cef/libcef/browser/browser_info_manager.h"
@@ -36,8 +37,8 @@
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/render_view_host.h"
-#include "content/public/common/content_features.h"
 #include "content/public/browser/render_widget_host.h"
+#include "content/public/common/content_features.h"
 #include "ui/base/resource/resource_scale_factor.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/shell_dialogs/select_file_policy.h"
