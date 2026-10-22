@@ -386,7 +386,19 @@ bool CefBrowserPlatformDelegate::HasExternalParent() const {
 }
 
 void CefBrowserPlatformDelegate::WasHidden(bool hidden) {
-  DCHECK(false);
+  // AgentMux: windowed browsers too. A windowed browser whose window is still
+  // shown (an embedder that hides it by collapsing it, or behind another
+  // window with native occlusion off) stays visible to the renderer: no
+  // hidden-page timer throttling, and it keeps producing frames. The
+  // windowless delegate overrides this and also notifies its view.
+  if (!web_contents_) {
+    return;
+  }
+  if (hidden) {
+    web_contents_->WasHidden();
+  } else {
+    web_contents_->WasShown();
+  }
 }
 
 bool CefBrowserPlatformDelegate::IsHidden() const {
