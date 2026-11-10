@@ -1095,7 +1095,7 @@ class CefBrowserHost : public virtual CefBaseRefCounted {
 
 #if CEF_API_ADDED(15400)
   // AgentMux addition, in 15400 like CefRequestContext's
-  // GetAutocompleteSuggestions: a client built for 15400 (CEF_API_VERSION_LAST)
+  // GetAutocompleteSuggestions: a client built for 15400 or later
   // gets them, which it wouldn't as experimental. The generated C struct lists
   // versioned members by version, so these land after GetRuntimeStyle and
   // before the experimental SetAxViewportCollapse, which moves back by three

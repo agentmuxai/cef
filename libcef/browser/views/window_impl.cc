@@ -1005,7 +1005,9 @@ void CefWindowImpl::CreateWidget(gfx::AcceleratedWidget parent_widget) {
   // default opaque white clear color, which then filled the wl_surface
   // framebuffer with opaque white pixels regardless of
   // CefSettings.background_color.
-  if (CefContext::Get() &&
+  // Only a frameless window is translucent (CefWindowView::CreateWidget); a
+  // framed one keeps the opaque compositor clear color.
+  if (cef_window_view()->IsFrameless() && CefContext::Get() &&
       CefContext::Get()->GetBackgroundColor(nullptr, STATE_ENABLED) ==
           SK_ColorTRANSPARENT) {
     SetBackgroundColor(SK_ColorTRANSPARENT);

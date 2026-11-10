@@ -460,8 +460,8 @@ SkColor CefContext::GetBackgroundColor(
   // Default to opaque white if no acceptable color values are found.
   SkColor sk_color = SK_ColorWHITE;
 
-  if (!browser_settings ||
-      !GetColor(browser_settings->background_color, is_transparent, &sk_color)) {
+  if (!browser_settings || !GetColor(browser_settings->background_color,
+                                     is_transparent, &sk_color)) {
     GetColor(settings_.background_color, is_transparent, &sk_color);
   }
   return sk_color;
