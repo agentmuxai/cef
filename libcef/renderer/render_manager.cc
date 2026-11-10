@@ -307,7 +307,8 @@ CefRefPtr<CefBrowserImpl> CefRenderManager::MaybeCreateBrowser(
     config = cef::BrowserConfig{
         params->config->is_windowless, params->config->print_preview_enabled,
         params->config->move_pip_enabled,
-        params->config->allow_pip_without_user_activation};
+        params->config->allow_pip_without_user_activation,
+        params->config->background_transparent};
   }
 
   if (params->is_excluded || params->browser_id < 0) {
@@ -323,6 +324,21 @@ CefRefPtr<CefBrowserImpl> CefRenderManager::MaybeCreateBrowser(
   CefRefPtr<CefBrowserImpl> browser = new CefBrowserImpl(
       web_view, params->browser_id, params->config->is_popup, *config);
   browsers_.insert(std::make_pair(web_view, browser));
+
+  // Transparency cascade, renderer side: when the browser's resolved
+  // background color is fully transparent, arm Blink's base-background-color
+  // override for this WebView. Without it page_base_background_color_ stays
+  // SK_ColorWHITE and every promoted compositing layer that paints page
+  // background clears to opaque white — the browser-side cascade
+  // (SetPageBaseBackgroundColor + RWHView::SetBackgroundColor +
+  // SetBackgroundOpaque(false)) flips the LayerTreeHost but never this.
+  // Runs per WebView creation, so renderer process swaps re-apply naturally
+  // (the override is sticky on the WebViewImpl instance). Windowless (OSR)
+  // browsers keep their own transparent-painting path and are excluded.
+  // See agentmux/docs/retro/cef-linux-transparency-consolidated.md.
+  if (config->background_transparent && !config->is_windowless) {
+    blink_glue::SetBaseBackgroundColorOverrideTransparent(web_view, true);
+  }
 
   // Notify the render process handler.
   CefRefPtr<CefApp> application = CefAppManager::Get()->GetApplication();

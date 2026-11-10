@@ -386,7 +386,19 @@ bool CefBrowserPlatformDelegate::HasExternalParent() const {
 }
 
 void CefBrowserPlatformDelegate::WasHidden(bool hidden) {
-  DCHECK(false);
+  // AgentMux: windowed browsers too. A windowed browser whose window is still
+  // shown (an embedder that hides it by collapsing it, or behind another
+  // window with native occlusion off) stays visible to the renderer: no
+  // hidden-page timer throttling, and it keeps producing frames. The
+  // windowless delegate overrides this and also notifies its view.
+  if (!web_contents_) {
+    return;
+  }
+  if (hidden) {
+    web_contents_->WasHidden();
+  } else {
+    web_contents_->WasShown();
+  }
 }
 
 bool CefBrowserPlatformDelegate::IsHidden() const {
@@ -574,9 +586,19 @@ bool CefBrowserPlatformDelegate::AllowPictureInPictureWithoutUserActivation()
 }
 
 cef::BrowserConfig CefBrowserPlatformDelegate::GetBrowserConfig() const {
+  // background_transparent: GetBackgroundColor() returns the per-browser
+  // color resolved at delegate-creation time (browser_platform_delegate_
+  // create.cc — CefContext::GetBackgroundColor with STATE_ENABLED for
+  // windowless/views-hosted browsers, including popups of views-hosted
+  // openers). This is the same arming condition as the browser-side
+  // transparency cascade in CefBrowserViewImpl, and unlike a browser_view_
+  // lookup it is valid before SetBrowserView() — popups and Alloy-style
+  // BrowserViews report correctly (codex review on PR #4).
   return {IsWindowless(), IsPrintPreviewSupported(),
           IsMovePictureInPictureEnabled(),
-          AllowPictureInPictureWithoutUserActivation()};
+          AllowPictureInPictureWithoutUserActivation(),
+          /*background_transparent=*/SkColorGetA(GetBackgroundColor()) ==
+              SK_AlphaTRANSPARENT};
 }
 
 // static

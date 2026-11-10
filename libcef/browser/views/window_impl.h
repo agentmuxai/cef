@@ -79,6 +79,7 @@ class CefWindowImpl
                 const CefPoint& screen_point,
                 cef_menu_anchor_position_t anchor_position) override;
   void CancelMenu() override;
+  bool BeginWindowDrag() override;
   CefRefPtr<CefDisplay> GetDisplay() override;
   CefRect GetClientAreaBoundsInScreen() override;
   void SetDraggableRegions(

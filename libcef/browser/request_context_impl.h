@@ -122,6 +122,9 @@ class CefRequestContextImpl : public CefRequestContext {
   void CloseAllConnections(CefRefPtr<CefCompletionCallback> callback) override;
   void ResolveHost(const CefString& origin,
                    CefRefPtr<CefResolveCallback> callback) override;
+  void GetAutocompleteSuggestions(
+      const CefString& text,
+      CefRefPtr<CefAutocompleteCallback> callback) override;
   CefRefPtr<CefMediaRouter> GetMediaRouter(
       CefRefPtr<CefCompletionCallback> callback) override;
   CefRefPtr<CefValue> GetWebsiteSetting(
@@ -207,6 +210,10 @@ class CefRequestContextImpl : public CefRequestContext {
   void ResolveHostInternal(const CefString& origin,
                            CefRefPtr<CefResolveCallback> callback,
                            CefBrowserContext::Getter browser_context_getter);
+  void GetAutocompleteSuggestionsInternal(
+      const CefString& text,
+      CefRefPtr<CefAutocompleteCallback> callback,
+      CefBrowserContext::Getter browser_context_getter);
   void SetWebsiteSettingInternal(
       const CefString& requesting_url,
       const CefString& top_level_url,
