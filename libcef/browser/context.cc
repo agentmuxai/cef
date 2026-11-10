@@ -450,11 +450,12 @@ bool CefContext::OnInitThread() {
 SkColor CefContext::GetBackgroundColor(
     const CefBrowserSettings* browser_settings,
     cef_state_t transparent_state) const {
-  bool is_transparent = transparent_state == STATE_ENABLED
-                           ? true
-                           : (transparent_state == STATE_DISABLED
-                                  ? false
-                                  : !!settings_.windowless_rendering_enabled);
+  bool is_transparent =
+      transparent_state == STATE_ENABLED
+          ? true
+          : (transparent_state == STATE_DISABLED
+                 ? false
+                 : !!settings_.windowless_rendering_enabled);
 
   // Default to opaque white if no acceptable color values are found.
   SkColor sk_color = SK_ColorWHITE;
