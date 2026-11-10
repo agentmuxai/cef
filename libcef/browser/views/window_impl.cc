@@ -603,8 +603,9 @@ void CefWindowImpl::CancelMenu() {
 }
 
 // Begin a native interactive window move via the platform's
-// WmMoveResizeHandler. On Linux/Wayland this dispatches xdg_toplevel.move using the most recent
-// input serial; on Linux/X11 it dispatches _NET_WM_MOVERESIZE. Both are
+// WmMoveResizeHandler. On Linux/Wayland this dispatches xdg_toplevel.move
+// using the most recent input serial; on Linux/X11 it dispatches
+// _NET_WM_MOVERESIZE. Both are
 // non-blocking — the compositor takes over until the user releases the
 // mouse button.
 //
