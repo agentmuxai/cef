@@ -68,8 +68,9 @@ class AutocompleteHelper : public AutocompleteController::Observer,
       : profile_(profile), callback_(callback) {
     // HistoryEmbeddingsProvider supports one query at a time across the
     // profile; leave it out so this can never interfere with the browser's.
-    const int providers = AutocompleteClassifier::DefaultOmniboxProviders() &
-                          ~AutocompleteProvider::TYPE_HISTORY_EMBEDDINGS;
+    const int providers =
+        AutocompleteClassifier::DefaultOmniboxProviders() &
+        ~static_cast<int>(AutocompleteProvider::Type::kHistoryEmbeddings);
     controller_ = std::make_unique<AutocompleteController>(
         std::make_unique<ChromeAutocompleteProviderClient>(profile),
         AutocompleteControllerConfig{.provider_types = providers});
@@ -157,7 +158,7 @@ class AutocompleteHelper : public AutocompleteController::Observer,
       m->SetString("destination_url", match.destination_url.spec());
       m->SetString("fill_into_edit", match.fill_into_edit);
       m->SetString("inline_autocompletion", match.inline_autocompletion);
-      m->SetString("type", AutocompleteMatchType::ToString(match.type));
+      m->SetString("type", AutocompleteMatchTypeToString(match.type));
       m->SetString("provider",
                    match.provider ? match.provider->GetName() : "");
       m->SetInt("relevance", match.relevance);
