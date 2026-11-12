@@ -7,6 +7,7 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 
 #include "base/memory/raw_ptr.h"
 #include "cef/include/views/cef_overlay_controller.h"
@@ -40,6 +41,10 @@ class CefOverlayViewHost : public views::WidgetDelegate,
 
   void SetOverlayBounds(const gfx::Rect& bounds);
   void SetOverlayInsets(const CefInsets& insets);
+
+  // Shows, and hit-tests, only the union of |rects| (overlay-local DIP). An
+  // empty vector removes the clip. Aura only.
+  void SetClipRects(std::vector<gfx::Rect> rects);
 
   // views::ViewObserver methods:
   void OnViewBoundsChanged(views::View* observed_view) override;

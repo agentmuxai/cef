@@ -11,10 +11,37 @@
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/theme_copying_widget.h"
 #include "third_party/skia/include/core/SkColor.h"
+#include "ui/gfx/geometry/rect.h"
+#include "ui/views/widget/widget.h"
+#if defined(USE_AURA)
+#include "ui/aura/window.h"
+#include "ui/aura/window_targeter.h"
+#endif
 #include "ui/compositor/compositor.h"
 #include "ui/compositor/layer.h"
 
 namespace {
+
+#if defined(USE_AURA)
+// Makes the parts of the overlay outside |rects| transparent to input. The
+// Widget's shape (Widget::SetShape) only stops them from being drawn.
+class ClipTargeter : public aura::WindowTargeter {
+ public:
+  explicit ClipTargeter(std::vector<gfx::Rect> rects)
+      : rects_(std::move(rects)) {}
+
+  ClipTargeter(const ClipTargeter&) = delete;
+  ClipTargeter& operator=(const ClipTargeter&) = delete;
+
+  std::unique_ptr<HitTestRects> GetExtraHitTestShapeRects(
+      aura::Window* target) const override {
+    return std::make_unique<HitTestRects>(rects_);
+  }
+
+ private:
+  const std::vector<gfx::Rect> rects_;
+};
+#endif  // defined(USE_AURA)
 
 class CefOverlayControllerImpl : public CefOverlayController {
  public:
@@ -161,6 +188,17 @@ class CefOverlayControllerImpl : public CefOverlayController {
 
   bool IsDrawn() override { return IsVisible(); }
 
+  void SetClipRects(const std::vector<CefRect>& rects) override {
+    if (IsValid()) {
+      std::vector<gfx::Rect> clip;
+      clip.reserve(rects.size());
+      for (const auto& rect : rects) {
+        clip.emplace_back(rect.x, rect.y, rect.width, rect.height);
+      }
+      host_->SetClipRects(std::move(clip));
+    }
+  }
+
  private:
   raw_ptr<CefOverlayViewHost> host_;
   CefRefPtr<CefView> view_;
@@ -300,6 +338,35 @@ void CefOverlayViewHost::SetOverlayInsets(const CefInsets& insets) {
   }
   insets_ = insets;
   MoveIfNecessary();
+}
+
+void CefOverlayViewHost::SetClipRects(std::vector<gfx::Rect> rects) {
+#if defined(USE_AURA)
+  if (!widget_) {
+    return;
+  }
+
+  auto* window = widget_->GetNativeWindow();
+  if (rects.empty()) {
+    widget_->SetShape(nullptr);
+    if (window) {
+      window->SetEventTargeter(nullptr);
+    }
+    return;
+  }
+
+  // Empty rectangles show and hit-test nothing. If that is all there is, the
+  // shape and the targeter hold one of them: everything is clipped.
+  std::erase_if(rects, [](const gfx::Rect& rect) { return rect.IsEmpty(); });
+  if (rects.empty()) {
+    rects.emplace_back();
+  }
+
+  widget_->SetShape(std::make_unique<views::Widget::ShapeRects>(rects));
+  if (window) {
+    window->SetEventTargeter(std::make_unique<ClipTargeter>(std::move(rects)));
+  }
+#endif  // defined(USE_AURA)
 }
 
 void CefOverlayViewHost::OnViewBoundsChanged(views::View* observed_view) {

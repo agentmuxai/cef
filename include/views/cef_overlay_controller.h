@@ -38,6 +38,8 @@
 #define CEF_INCLUDE_VIEWS_CEF_OVERLAY_CONTROLLER_H_
 #pragma once
 
+#include <vector>
+
 #include "include/cef_base.h"
 
 class CefView;
@@ -205,6 +207,20 @@ class CefOverlayController : public CefBaseRefCounted {
   ///
   /*--cef()--*/
   virtual bool IsDrawn() = 0;
+
+  ///
+  /// Limits what is shown of this overlay, and where it receives input, to the
+  /// union of |rects|. The rectangles are in the overlay's own coordinates (DIP,
+  /// origin at its top-left) and may overlap. Content outside them is neither
+  /// drawn nor hit-tested, so mouse and touch input falls through to what is
+  /// behind the overlay. Rectangles with no area are ignored; if every one of
+  /// them is, nothing of the overlay is shown. Call with an empty vector to
+  /// remove the clip. The rectangles are not adjusted when the overlay is
+  /// resized or the display scale changes: send them again. Currently
+  /// implemented on Aura platforms (Windows, Linux) and ignored elsewhere.
+  ///
+  /*--cef(added=15600)--*/
+  virtual void SetClipRects(const std::vector<CefRect>& rects) = 0;
 };
 
 #endif  // CEF_INCLUDE_VIEWS_CEF_OVERLAY_CONTROLLER_H_
