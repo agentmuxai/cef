@@ -203,7 +203,11 @@ void CefBrowserPlatformDelegateAlloy::AttachHelpers(
 
   // Adopt the WebContents now, so all observers are in place, as the network
   // requests for its initial navigation will start immediately
-  TabHelpers::AttachTabHelpers(web_contents);
+  // AgentMux: do not attach Chrome's browser autofill (ContentAutofillClient
+  // and the helpers that depend on it). It expects a Chrome Browser window and
+  // its save/fill UI, which a CEF embedder does not have, and it sees every
+  // form the embedder shows, card entry forms included.
+  TabHelpers::AttachTabHelpers(web_contents, /*enable_browser_autofill=*/false);
 
   // Make the tab show up in the task manager.
   task_manager::WebContentsTags::CreateForTabContents(web_contents);
